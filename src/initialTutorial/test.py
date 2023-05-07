@@ -8,14 +8,15 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
+from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve
 
 #%matplotlib inline
 
 # Reading the train.csv by removing the
 # last column since it's an empty column
-DATA_PATH = "../../data/Training.csv"
+DATA_PATH = "data/Training.csv"
 data = pd.read_csv(DATA_PATH).dropna(axis = 1)
 
 # Checking whether the dataset is balanced or not
@@ -51,7 +52,8 @@ def cv_scoring(estimator, X, y):
 models = {
 	"SVC":SVC(),
 	"Gaussian NB":GaussianNB(),
-	"Random Forest":RandomForestClassifier(random_state=18)
+	"Random Forest":RandomForestClassifier(random_state=18),
+	"Logistic Regression":LogisticRegression()
 }
 
 # Producing cross validation score for the models
@@ -113,17 +115,68 @@ sns.heatmap(cf_matrix, annot=True)
 plt.title("Confusion Matrix for Random Forest Classifier on Test Data")
 plt.show()
 
+# Train and test the logistic regression model
+clf = LogisticRegression()
+clf.fit(X_train, y_train)
+lg_model = LogisticRegression()
+lg_model.fit(X_train, y_train)
+preds = lg_model.predict(X_test)
+print(f"Accuracy on train data by Logistic Regression Model\
+: {accuracy_score(y_train, lg_model.predict(X_train))*100}")
+
+print(f"Accuracy on test data by Logistic Regression Model\
+: {accuracy_score(y_test, preds)*100}")
+
+cf_matrix = confusion_matrix(y_test, preds)
+plt.figure(figsize=(12,8))
+sns.heatmap(cf_matrix, annot=True)
+plt.title("Confusion Matrix for Logistic Regression Model on Test Data")
+plt.show()
+
+
+
+# Make predictions
+y_pred = clf.predict(X_test)
+
+# Compute accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print('Accuracy: %.2f%%' % (accuracy * 100.0))
+
+# Compute precision, recall, and F1-score
+precision = precision_score(y_test, y_pred, average='macro')
+recall = recall_score(y_test, y_pred, average='macro')
+f1 = f1_score(y_test, y_pred, average='macro')
+print('Precision: %.2f%%, Recall: %.2f%%, F1-score: %.2f%%' % (precision * 100.0, recall * 100.0, f1 * 100.0))
+
+# Calculate the area under the ROC curve of the model
+y_pred_prob = clf.predict_proba(X_test)[:,1]
+auc = roc_auc_score(y_test, y_pred_prob)
+print("AUC:", auc)
+
+# Plot the ROC curve
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
+plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % auc)
+plt.plot([0, 1], [0, 1], 'k--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc="lower right")
+plt.show()
 
 # Training the models on whole data
 final_svm_model = SVC()
 final_nb_model = GaussianNB()
 final_rf_model = RandomForestClassifier(random_state=18)
+final_lg_model = LogisticRegression()
 final_svm_model.fit(X, y)
 final_nb_model.fit(X, y)
 final_rf_model.fit(X, y)
+final_lg_model.fit(X, y)
 
 # Reading the test data
-test_data = pd.read_csv("../../data/Testing.csv").dropna(axis=1)
+test_data = pd.read_csv("data/Testing.csv").dropna(axis=1)
 
 test_X = test_data.iloc[:, :-1]
 test_Y = encoder.transform(test_data.iloc[:, -1])
@@ -133,9 +186,10 @@ test_Y = encoder.transform(test_data.iloc[:, -1])
 svm_preds = final_svm_model.predict(test_X)
 nb_preds = final_nb_model.predict(test_X)
 rf_preds = final_rf_model.predict(test_X)
+lg_preds = final_lg_model.predict(test_X)
 
 final_preds = [mode([i,j,k])[0][0] for i,j,
-			k in zip(svm_preds, nb_preds, rf_preds)]
+			k in zip(svm_preds, nb_preds, rf_preds, lg_preds)]
 
 print(f"Accuracy on Test dataset by the combined model\
 : {accuracy_score(test_Y, final_preds)*100}")
@@ -182,6 +236,7 @@ def predictDisease(symptoms):
 	rf_prediction = data_dict["predictions_classes"][final_rf_model.predict(input_data)[0]]
 	nb_prediction = data_dict["predictions_classes"][final_nb_model.predict(input_data)[0]]
 	svm_prediction = data_dict["predictions_classes"][final_svm_model.predict(input_data)[0]]
+	lg_prediction = data_dict["predictions_classes"][final_lg_model.predict(input_data)[0]]
 	
 	# making final prediction by taking mode of all predictions
 	final_prediction = mode([rf_prediction, nb_prediction, svm_prediction])[0][0]
@@ -189,6 +244,7 @@ def predictDisease(symptoms):
 		"rf_model_prediction": rf_prediction,
 		"naive_bayes_prediction": nb_prediction,
 		"svm_model_prediction": nb_prediction,
+		"logistic_regression_model_prediction": lg_prediction,
 		"final_prediction":final_prediction
 	}
 	return predictions
