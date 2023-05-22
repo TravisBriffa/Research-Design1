@@ -1,16 +1,19 @@
 # Importing libraries
+import os
 import numpy as np
 import pandas as pd
 from scipy.stats import mode
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import label_binarize
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve
+from sklearn.metrics import accuracy_score, confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve,  auc
+from itertools import cycle
+
 
 #%matplotlib inline
 
@@ -148,22 +151,32 @@ recall = recall_score(y_test, y_pred, average='macro')
 f1 = f1_score(y_test, y_pred, average='macro')
 print('Precision: %.2f%%, Recall: %.2f%%, F1-score: %.2f%%' % (precision * 100.0, recall * 100.0, f1 * 100.0))
 
+print("y_test shape:", y_test.shape)
+print("Unique values in y_test:", np.unique(y_test))
+
+
+
+
 # Calculate the area under the ROC curve of the model
-y_pred_prob = clf.predict_proba(X_test)[:,1]
-auc = roc_auc_score(y_test, y_pred_prob)
-print("AUC:", auc)
+# Convert the problem into a binary classification problem
+binary_y_test = label_binarize(y_test, classes=np.unique(y))
+y_pred_prob = clf.predict_proba(X_test)[:, 1]
+print("y_pred_prob shape:", y_pred_prob.shape)
+#auc = roc_auc_score(y_test, y_pred_prob, multi_class='ovr')
+#print("AUC:", auc)
+
 
 # Plot the ROC curve
-fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
-plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % auc)
-plt.plot([0, 1], [0, 1], 'k--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Receiver operating characteristic')
-plt.legend(loc="lower right")
-plt.show()
+#fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
+#plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % auc)
+#plt.plot([0, 1], [0, 1], 'k--')
+#plt.xlim([0.0, 1.0])
+#plt.ylim([0.0, 1.05])
+#plt.xlabel('False Positive Rate')
+#plt.ylabel('True Positive Rate')
+#plt.title('Receiver operating characteristic')
+#plt.legend(loc="lower right")
+#plt.show()
 
 # Training the models on whole data
 final_svm_model = SVC()
