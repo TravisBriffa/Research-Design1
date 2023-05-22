@@ -12,6 +12,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve,  auc
+from sklearn.calibration import LabelEncoder
 from itertools import cycle
 
 
@@ -19,7 +20,7 @@ from itertools import cycle
 
 # Reading the train.csv by removing the
 # last column since it's an empty column
-DATA_PATH = "data/Training.csv"
+DATA_PATH = os.path.join("..", "..", "data", "Training.csv")
 data = pd.read_csv(DATA_PATH).dropna(axis = 1)
 
 # Checking whether the dataset is balanced or not
@@ -36,16 +37,22 @@ plt.show()
 
 # Encoding the target value into numerical
 # value using LabelEncoder
+# Encoding the target value into numerical
+# value using LabelEncoder
 encoder = LabelEncoder()
 data["prognosis"] = encoder.fit_transform(data["prognosis"])
 
 X = data.iloc[:,:-1]
 y = data.iloc[:, -1]
-X_train, X_test, y_train, y_test =train_test_split(
-X, y, test_size = 0.2, random_state = 24)
-
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=24, stratify=y)
 print(f"Train: {X_train.shape}, {y_train.shape}")
 print(f"Test: {X_test.shape}, {y_test.shape}")
+
+# Calculate means, standard deviations, and ranges for each variable
+variable_stats = X_train.describe()
+
+print("Variable Statistics:")
+print(variable_stats)
 
 # Defining scoring metric for k-fold cross validation
 def cv_scoring(estimator, X, y):
@@ -121,21 +128,15 @@ plt.show()
 # Train and test the logistic regression model
 clf = LogisticRegression()
 clf.fit(X_train, y_train)
-lg_model = LogisticRegression()
-lg_model.fit(X_train, y_train)
-preds = lg_model.predict(X_test)
-print(f"Accuracy on train data by Logistic Regression Model\
-: {accuracy_score(y_train, lg_model.predict(X_train))*100}")
-
-print(f"Accuracy on test data by Logistic Regression Model\
-: {accuracy_score(y_test, preds)*100}")
+preds = clf.predict(X_test)
+print(f"Accuracy on train data by Logistic Regression Model: {accuracy_score(y_train, clf.predict(X_train))*100}")
+print(f"Accuracy on test data by Logistic Regression Model: {accuracy_score(y_test, preds)*100}")
 
 cf_matrix = confusion_matrix(y_test, preds)
 plt.figure(figsize=(12,8))
 sns.heatmap(cf_matrix, annot=True)
 plt.title("Confusion Matrix for Logistic Regression Model on Test Data")
 plt.show()
-
 
 
 # Make predictions
@@ -154,29 +155,24 @@ print('Precision: %.2f%%, Recall: %.2f%%, F1-score: %.2f%%' % (precision * 100.0
 print("y_test shape:", y_test.shape)
 print("Unique values in y_test:", np.unique(y_test))
 
+clf = LogisticRegression()
+clf.fit(X_train, y_train)
+y_pred_prob = clf.predict_proba(X_test)
 
-
+# Binarize the labels
+num_classes = y_pred_prob.shape[1]
+binary_y_test = label_binarize(y_test, classes=range(num_classes))
+print("y_pred_prob shape:", y_pred_prob.shape)
 
 # Calculate the area under the ROC curve of the model
-# Convert the problem into a binary classification problem
-binary_y_test = label_binarize(y_test, classes=np.unique(y))
-y_pred_prob = clf.predict_proba(X_test)[:, 1]
-print("y_pred_prob shape:", y_pred_prob.shape)
-#auc = roc_auc_score(y_test, y_pred_prob, multi_class='ovr')
-#print("AUC:", auc)
+auc = roc_auc_score(binary_y_test, y_pred_prob, multi_class='ovr')
+print("AUC:", auc)
 
-
-# Plot the ROC curve
-#fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
-#plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % auc)
-#plt.plot([0, 1], [0, 1], 'k--')
-#plt.xlim([0.0, 1.0])
-#plt.ylim([0.0, 1.05])
-#plt.xlabel('False Positive Rate')
-#plt.ylabel('True Positive Rate')
-#plt.title('Receiver operating characteristic')
-#plt.legend(loc="lower right")
-#plt.show()
+# Calculate the area under the ROC curve of the model for each class
+auc_scores = dict()
+for i in range(num_classes):
+    fpr, tpr, _ = roc_curve(binary_y_test[:, i], y_pred_prob[:, i])
+    auc_scores[i] = np.trapz(tpr, fpr)
 
 # Training the models on whole data
 final_svm_model = SVC()
@@ -188,8 +184,9 @@ final_nb_model.fit(X, y)
 final_rf_model.fit(X, y)
 final_lg_model.fit(X, y)
 
+
 # Reading the test data
-test_data = pd.read_csv("data/Testing.csv").dropna(axis=1)
+test_data = pd.read_csv(os.path.join("..", "..", "data", "Testing.csv")).dropna(axis=1)
 
 test_X = test_data.iloc[:, :-1]
 test_Y = encoder.transform(test_data.iloc[:, -1])
@@ -201,8 +198,11 @@ nb_preds = final_nb_model.predict(test_X)
 rf_preds = final_rf_model.predict(test_X)
 lg_preds = final_lg_model.predict(test_X)
 
-final_preds = [mode([i,j,k])[0][0] for i,j,
-			k in zip(svm_preds, nb_preds, rf_preds, lg_preds)]
+final_preds = [mode([i,j,k,l])[0][0] for i,j,
+			k,l in zip(svm_preds, nb_preds, rf_preds, lg_preds)]
+
+print(f"Accuracy on Test dataset by the combined model\
+: {accuracy_score(test_Y, final_preds)*100}")
 
 print(f"Accuracy on Test dataset by the combined model\
 : {accuracy_score(test_Y, final_preds)*100}")
@@ -213,7 +213,6 @@ plt.figure(figsize=(12,8))
 sns.heatmap(cf_matrix, annot = True)
 plt.title("Confusion Matrix for Combined Model on Test Dataset")
 plt.show()
-
 
 symptoms = X.columns.values
 
